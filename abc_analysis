@@ -1,0 +1,50 @@
+with cte as (
+            select
+              count(*) as total_count,
+              sum(Quantity * UnitPrice) as total_sum
+            from `goit-398911.Data_analyst.Source_retail`
+            where 'InvoiceNo' not like 'C%' 
+                  and 'Quantity' is not null
+                  and 'UnitPrice' is not null
+                  and 'Description' not like '?%'
+                  and 'Description' is not null
+),
+  cte2 as(select
+        Description,
+        count(InvoiceNo) as count_goods_in_invoice,
+        count(*) as count_goods,
+        round(count(*) * 100.0 / (select total_count from cte),2) as percent_of_total_count,
+        sum(Quantity * UnitPrice) as count_sum,
+        round(sum(Quantity * UnitPrice) * 100.0 / (select total_sum from cte),2) as percent_of_total_sum
+  from `goit-398911.Data_analyst.Source_retail`
+  where 'InvoiceNo' not like 'C%' 
+        and 'Quantity' is not null
+        and 'UnitPrice' is not null
+        and 'Description' not like '?%'
+        and 'Description' is not null
+  group by Description
+  order by count_goods desc)
+select Description,
+       case
+            when sum(percent_of_total_count) over (order by percent_of_total_count desc) <= 80 then 'A'
+            when sum(percent_of_total_count) over (order by percent_of_total_count desc) > 80 
+                 and sum(percent_of_total_count) over (order by percent_of_total_count desc) <= 95 then 'B'
+            when sum(percent_of_total_count) over (order by percent_of_total_count desc) > 95 
+                 and sum(percent_of_total_count) over (order by percent_of_total_count desc) <= 100 then 'C'
+            end as rank_1,
+       case
+            when sum(percent_of_total_sum) over (order by percent_of_total_sum desc) <= 80 then 'A'
+            when sum(percent_of_total_sum) over (order by percent_of_total_sum desc) > 80 
+                 and sum(percent_of_total_sum) over (order by percent_of_total_sum desc) <= 95 then 'B'
+            when sum(percent_of_total_sum) over (order by percent_of_total_sum desc) > 95 
+                and sum(percent_of_total_sum) over (order by percent_of_total_sum desc) <= 100 then 'C'
+            end as rank_2,
+       case
+            when sum(count_goods_in_invoice) over (order by count_goods_in_invoice desc) <= 80 then 'A'
+            when sum(count_goods_in_invoice) over (order by count_goods_in_invoice desc) > 80 
+                 and sum(count_goods_in_invoice) over (order by count_goods_in_invoice desc) <= 95 then 'B'
+            when sum(count_goods_in_invoice) over (order by count_goods_in_invoice desc) > 95 
+                and sum(count_goods_in_invoice) over (order by count_goods_in_invoice desc) <= 100 then 'C'
+            end as rank_3
+from cte2
+order by rank_1, rank_2, rank_3
