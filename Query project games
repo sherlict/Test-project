@@ -1,0 +1,79 @@
+with cte1 as (
+     -- convert the date to month format
+     -- count revenu by subscriber, month, game
+    select
+        user_id,
+        game_name,
+        FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(DATE(payment_date), MONTH)) AS payment_month,
+        sum(revenue_amount_usd) AS total_revenue
+    from
+        `semiotic-primer-398715.games.games_payments3`
+    group by
+        user_id, 
+        payment_month, 
+        game_name
+),
+cte2 as (
+     -- enter the first and last payment and month of payment
+    select
+        payment_month,
+        user_id,
+        game_name,
+        total_revenue,
+        FORMAT_DATE('%Y-%m-%d', DATE_SUB(DATE_TRUNC(DATE(payment_month), MONTH), INTERVAL 1 MONTH)) AS previous_calendar_month,
+        FORMAT_DATE('%Y-%m-%d', DATE_ADD(DATE_TRUNC(DATE(payment_month), MONTH), INTERVAL 1 MONTH)) AS next_calendar_month,
+        lag(total_revenue) over (partition by user_id order by payment_month) as previous_paid_month_revenue,
+        lag(payment_month) over (partition by user_id order by payment_month) as previous_paid_month,
+        lead(payment_month) over (partition by user_id order by payment_month) as  next_paid_month
+    from cte1
+),
+cte3 as ( 
+     -- determination of product metrics depending on the logic of their calculation
+    select 
+        user_id,
+        total_revenue,
+        previous_paid_month_revenue,
+        payment_month,
+        previous_calendar_month,
+        next_calendar_month,
+        previous_paid_month,
+        next_paid_month,
+        case when previous_paid_month is null
+             then total_revenue
+             end as new_mrr,
+        case when previous_paid_month = previous_calendar_month and total_revenue > previous_paid_month_revenue
+             then total_revenue - previous_paid_month_revenue
+             end as expansion_revenue,
+        case when previous_paid_month = previous_calendar_month and total_revenue < previous_paid_month_revenue
+             then total_revenue - previous_paid_month_revenue
+             end as contraction_revenue,
+        case when previous_paid_month != previous_calendar_month and previous_paid_month is not null 
+             then total_revenue
+             end as back_from_churn_revenue,
+        case when next_paid_month is null or next_paid_month != next_calendar_month
+             then total_revenue
+             end as churned_revenue,
+        case when next_paid_month is null or next_paid_month != next_calendar_month
+             then user_id
+             end as churned_revenue_user,
+        case when next_paid_month is null or next_paid_month != next_calendar_month
+             then next_calendar_month
+             end as churn_month
+     from cte2
+)
+select
+      -- formation of the main metrics table
+       cte3.*,
+       gpu.language,
+       gpu.has_older_device_model,
+       gpu.age,
+       -- calculation of how many months the subscriber made payments
+       DATE_DIFF(DATE(last_value(payment_month) OVER (PARTITION BY user_id 
+               ORDER BY payment_month RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)), 
+               DATE(first_value(payment_month) OVER (PARTITION BY user_id 
+               ORDER BY payment_month)), MONTH)+1 AS diff_payment_month,
+       -- the amount of subscriber payments for the entire time of using the service
+       round(avg(total_revenue) over (partition by user_id),2) as cltv       
+from cte3
+left join `semiotic-primer-398715.games.games_paid_users` as gpu using (user_id)
+-- the final calculation of product metrics will be carried out in the Tableau
