@@ -1,0 +1,136 @@
+select 
+        date(timestamp_micros(event_timestamp)) as event_date,
+        traffic_source.source as source, 
+        traffic_source.medium as medium, 
+        traffic_source.name as name,
+        geo.country, 
+        device.category,
+        device.operating_system_version,
+        device.language,
+        (case when event_params.key = 'page_title' then value.string_value end) as page_title,
+        sum(case when event_params.key = 'ga_session_id' 
+                 then user_ltv.revenue 
+                 end) as revenu,
+        count(distinct case when event_params.key = 'ga_session_id' 
+                            then ecommerce.unique_items 
+                            end) as count_items,
+        count(distinct user_pseudo_id || cast((case when event_params.key = 'ga_session_id' 
+                                                    then value.int_value 
+                                                    end) as string)) as user_sessions_count,
+        count(distinct case when event_name = 'first_visit' 
+                            then user_pseudo_id || cast((case when event_params.key = 'ga_session_id' 
+                                                              then value.int_value 
+                                                              end) as string) 
+                            end) as user_first_visit,
+        count(distinct case when event_name = 'view_item' 
+                            then user_pseudo_id || cast((case when event_params.key = 'ga_session_id' 
+                                                              then value.int_value 
+                                                              end) as string) 
+                                        end) as user_view_item,
+        count(distinct case when event_name = 'view_promotion' 
+                            then user_pseudo_id || cast((case when event_params.key = 'ga_session_id' 
+                                                              then value.int_value 
+                                                              end) as string) 
+                            end) as user_view_promotion,
+        count(distinct case when event_name = 'add_to_cart' 
+                            then user_pseudo_id || cast((case when event_params.key = 'ga_session_id' 
+                                                              then value.int_value 
+                                                              end) as string) 
+                            end) as user_add_to_cart,
+        count(distinct case when event_name = 'add_shipping_info' 
+                            then user_pseudo_id || cast((case when event_params.key = 'ga_session_id' 
+                                                              then value.int_value 
+                                                              end) as string) 
+                            end) as user_add_shipping_info,
+        count(distinct case when event_name = 'add_payment_info' 
+                            then user_pseudo_id || cast((case when event_params.key = 'ga_session_id' 
+                                                              then value.int_value 
+                                                              end) as string) 
+                            end) as user_add_payment_info,
+        count(distinct case when event_name = 'purchase' 
+                            then user_pseudo_id || cast((case when event_params.key = 'ga_session_id' 
+                                                              then value.int_value 
+                                                              end) as string) 
+                            end) as user_purchase,
+        round( case when count(distinct case when event_name = 'first_visit' 
+                                             then user_pseudo_id || cast((case when event_params.key = 'ga_session_id' 
+                                                                               then value.int_value 
+                                                                               end) as string) 
+                                             end) > 0 
+                    then  count(distinct case when event_name = 'add_to_cart' 
+                                              then user_pseudo_id || cast((case when event_params.key = 'ga_session_id' 
+                                                                                then value.int_value 
+                                                                                end) as string) 
+                                              end) / count(distinct case when event_name = 'first_visit' 
+                                                                         then user_pseudo_id || cast((case when event_params.key = 'ga_session_id' 
+                                                                                                           then value.int_value 
+                                                                                                           end) as string) 
+                                                                         end) *100 
+                    end,2) as visit_to_cart,
+        round( case when count(distinct case when event_name = 'first_visit' 
+                                             then user_pseudo_id || cast((case when event_params.key = 'ga_session_id' 
+                                                                               then value.int_value 
+                                                                               end) as string) 
+                                             end) > 0 
+                    then  count(distinct case when event_name = 'add_payment_info' 
+                                              then user_pseudo_id || cast((case when event_params.key = 'ga_session_id' 
+                                                                                then value.int_value 
+                                                                                end) as string) 
+                                              end) / count(distinct case when event_name = 'first_visit' 
+                                                                         then user_pseudo_id || cast((case when event_params.key = 'ga_session_id' 
+                                                                                                           then value.int_value 
+                                                                                                           end) as string) 
+                                                                         end) *100 
+                    end,2) as visit_to_checkout,
+        round( case when count(distinct case when event_name = 'first_visit' 
+                                             then user_pseudo_id || cast((case when event_params.key = 'ga_session_id' 
+                                                                               then value.int_value 
+                                                                               end) as string) 
+                                             end) > 0 
+                    then count(distinct case when event_name = 'purchase' 
+                                             then user_pseudo_id || cast((case when event_params.key = 'ga_session_id' 
+                                                                               then value.int_value 
+                                                                               end) as string) 
+                                             end) / count(distinct case when event_name = 'first_visit' 
+                                                                        then user_pseudo_id || cast((case when event_params.key = 'ga_session_id' 
+                                                                                                          then value.int_value 
+                                                                                                          end) as string) 
+                                                                        end) *100 
+                    end,2) as visit_to_purchase,
+        case when count(distinct case when event_name = 'purchase' 
+                                      then user_pseudo_id || cast((case when event_params.key = 'ga_session_id' 
+                                                                        then value.int_value 
+                                                                        end) as string) 
+                                      end) > 0 
+             then sum(case when event_params.key = 'ga_session_id' 
+                           then user_ltv.revenue end) / count(distinct case when event_name = 'purchase' 
+                                                                            then user_pseudo_id || cast((case when event_params.key = 'ga_session_id' 
+                                                                                                              then value.int_value 
+                                                                                                              end) as string) 
+                                                                            end)
+                           end as average_order_value,
+        round(case when count(distinct case when event_name = 'add_to_cart' 
+                                            then user_pseudo_id || cast((case when event_params.key = 'ga_session_id' 
+                                                                              then value.int_value 
+                                                                              end) as string) 
+                                            end) > 0 
+                        and count(distinct case when event_name = 'purchase' 
+                                                then user_pseudo_id || cast((case when event_params.key = 'ga_session_id' 
+                                                                                  then value.int_value 
+                                                                                  end) as string) 
+                                                end) > 0
+                   then (1-(count(distinct case when event_name = 'purchase' 
+                                                then user_pseudo_id || cast((case when event_params.key = 'ga_session_id' 
+                                                                                  then value.int_value 
+                                                                                  end) as string) 
+                                                end) / count(distinct case when event_name = 'add_to_cart' 
+                                                                           then user_pseudo_id || cast((case when event_params.key = 'ga_session_id' 
+                                                                                                             then value.int_value 
+                                                                                                             end) as string) 
+                                                                           end))) *100
+                   end, 2) as cart_abandonment_rate
+        from `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*` e, 
+              unnest(event_params) as event_params
+        where event_name in ('first_visit', 'view_item', 'view_promotion', 'add_to_cart', 'add_shipping_info', 'add_payment_info', 'purchase')          
+        group by 1,2,3,4,5,6,7,8,9
+        order by event_date desc
